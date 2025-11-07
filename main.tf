@@ -15,7 +15,7 @@ provider "aws" {
 # --- SECURITY GROUP ---
 resource "aws_security_group" "heartbeat_sg" {
   name        = "heartbeat-sg"
-  description = "Allow SSH for testing heartbeat instance"
+  description = "Allow SSH (only for testing)"
   ingress {
     from_port   = 22
     to_port     = 22
@@ -37,9 +37,7 @@ resource "aws_iam_role" "ec2_role" {
     Version = "2012-10-17"
     Statement = [{
       Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
-      }
+      Principal = { Service = "ec2.amazonaws.com" }
       Action = "sts:AssumeRole"
     }]
   })
@@ -55,29 +53,26 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   role = aws_iam_role.ec2_role.name
 }
 
-# --- EC2 INSTANCE ---
-data "aws_ami" "amazon_linux" {
+# --- EC2 INSTANCE (tiny) ---
+data "aws_ami" "amazon_linux_arm" {
   most_recent = true
   owners      = ["amazon"]
-
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    values = ["amzn2-ami-hvm-*-arm64-gp2"]
   }
 }
 
 resource "aws_instance" "heartbeat_service" {
-  ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = "t3.micro"
+  ami                    = data.aws_ami.amazon_linux_arm.id
+  instance_type          = "t4g.nano"
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
   user_data              = file("${path.module}/ec2/user_data.sh")
   vpc_security_group_ids = [aws_security_group.heartbeat_sg.id]
   tags = {
-    Name        = "Manejador de Pedidos - prueba"
-    Environment = "test"
-    Role        = "heartbeat-sender"
+    Name = "Manejador de Pedidos - prueba (mini)"
+    Role = "heartbeat-sender"
   }
-  description = "Instancia EC2 para pruebas del manejador de pedidos (envía heartbeats)"
 }
 
 # --- IAM Role para Lambda ---
@@ -88,9 +83,7 @@ resource "aws_iam_role" "lambda_exec_role" {
     Statement = [{
       Action = "sts:AssumeRole"
       Effect = "Allow"
-      Principal = {
-        Service = "lambda.amazonaws.com"
-      }
+      Principal = { Service = "lambda.amazonaws.com" }
     }]
   })
 }
@@ -140,8 +133,8 @@ resource "aws_sns_topic_subscription" "lambda_sub" {
 resource "aws_cloudwatch_metric_alarm" "heartbeat_alarm" {
   alarm_name          = "ServiceHeartbeatMissing"
   comparison_operator = "LessThanThreshold"
-  evaluation_periods  = 3
-  period              = 10
+  evaluation_periods  = 2
+  period              = 15
   threshold           = 0
   metric_name         = "ServiceAlive"
   namespace           = "HeartbeatService"
@@ -154,8 +147,4 @@ resource "aws_cloudwatch_metric_alarm" "heartbeat_alarm" {
 # --- Outputs ---
 output "ec2_public_ip" {
   value = aws_instance.heartbeat_service.public_ip
-}
-
-output "sns_topic_arn" {
-  value = aws_sns_topic.heartbeat_alerts.arn
 }
