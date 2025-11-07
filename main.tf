@@ -133,8 +133,8 @@ resource "aws_sns_topic_subscription" "lambda_sub" {
 resource "aws_cloudwatch_metric_alarm" "heartbeat_alarm" {
   alarm_name          = "ServiceHeartbeatMissing"
   comparison_operator = "LessThanThreshold"
-  evaluation_periods  = 2
-  period              = 15
+  evaluation_periods  = 3
+  period              = 10
   threshold           = 0
   metric_name         = "ServiceAlive"
   namespace           = "HeartbeatService"
